@@ -10,22 +10,54 @@ from diffusers import StableDiffusionPipeline
 from diffusers import StableDiffusionXLPipeline
 from diffusers import DiffusionPipeline
 from diffusers import StableDiffusion3Pipeline
-
 import argparse
 
 models = {
-    "sd15": {"path": "runwayml/stable-diffusion-v1-5", "desc": "Stable Diffusion 1.5 standard", "isLarge": False},
-    "sd14": {"path": "CompVis/stable-diffusion-v1-4", "desc": "Stable Diffusion 1.4 standard", "isLarge": False},
-    "sd21": {"path": "stabilityai/stable-diffusion-2-1", "desc": "Stable Diffusion 2.1 standard", "isLarge": False},
-    "sd21b":{"path":  "stabilityai/stable-diffusion-2-1-base", "desc": "Stable Diffusion 2.1 base", "isLarge": False},
-    "sd35t": {"path": "stabilityai/stable-diffusion-3.5-large-turbo", "desc": "Stable Diffusion 3.5 turbo", "isLarge": True},
-    "sd35m": {"path": "stabilityai/stable-diffusion-3.5-medium", "desc": "Stable Diffusion 3.5 medium", "isLarge": True},
-    "ds8": {"path": "Lykon/DreamShaper-8", "desc": "Photorealistic model based on Stable Diffusion 1.5 standard", "isLarge": False}, #photorealistic
-    "rv": {"path": "SG161222/Realistic_Vision_V1.4", "desc": "Photorealistic based on Stable Diffusion 1.4", "isLarge": False},
-    "av5": {"path": "ckpt/anything-v5-pytorch", "desc": "Stable Diffusion 1.5 standard", "isLarge": False}, #anime
-    "cf": {"path": "gsdf/Counterfeit-V2.5", "desc": "Stable Diffusion 1.5 standard", "isLarge": False},
-    "mm": {"path": "Meina/MeinaMix_V11", "desc": "MeniaMix base model for anime and manga", "isLarge": False},
-    "ill": {"path": "OnomaAIResearch/Illustrious-xl-early-release-v0", "desc": "Based on Stable Diffusion XL fine-tuned on Danbooru2023 Dataset", "isLarge": True}, #uncensored
+    "sd15": {"path": "runwayml/stable-diffusion-v1-5",
+             "desc": "Stable Diffusion 1.5 standard",
+             "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+    "sd14": {"path": "CompVis/stable-diffusion-v1-4",
+             "desc": "Stable Diffusion 1.4 standard",
+             "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+    "sd21": {"path": "stabilityai/stable-diffusion-2-1",
+             "desc": "Stable Diffusion 2.1 standard", "pipeline": "sdp",
+             "pipeline_options": {}, "img_gen_option": {}},
+    "sd21b":{"path":  "stabilityai/stable-diffusion-2-1-base",
+            "desc": "Stable Diffusion 2.1 base",
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+    "sd35t":{"path": "stabilityai/stable-diffusion-3.5-large-turbo",
+            "desc": "Stable Diffusion 3.5 turbo",
+            "pipeline": "sd3p", "pipeline_options": {}, "img_gen_option": {}},
+    "sd35m":{"path": "stabilityai/stable-diffusion-3.5-medium",
+            "desc": "Stable Diffusion 3.5 medium",
+            "pipeline": "sd3p", "pipeline_options": {}, "img_gen_option": {}},
+    "sd3m": {"path": "ckpt/stable-diffusion-3-medium-diffusers",
+            "desc": "Stable Diffusion 3.0 medium",
+            "pipeline": "sd", "pipeline_options": {}, "img_gen_option": {}},
+    "ds8":  {"path": "Lykon/DreamShaper-8",
+            "desc": "Photorealistic model based on Stable Diffusion 1.5 standard",
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}}, #photorealistic
+    "rv":   {"path": "SG161222/Realistic_Vision_V1.4",
+            "desc": "Photorealistic based on Stable Diffusion 1.4",
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+    "cf":   {"path": "gsdf/Counterfeit-V2.5",
+            "desc": "Manga and Anime tuned model",
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+    "mm":   {"path": "Meina/MeinaMix_V11",
+            "desc": "MeniaMix base model for anime and manga",
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+    "ill":  {"path": "OnomaAIResearch/Illustrious-xl-early-release-v0",
+            "desc": "Based on Stable Diffusion XL fine-tuned on Danbooru2023 Dataset, uncensored model",
+            "pipeline": "sdXLp",
+            "pipeline_options": {},
+            "img_gen_option": {"original_size": (512,512), "target_size": (1024,1024), "crops_coords_top_left": (0,0)}},
+    "yoda": {"path": "yodayo-ai/kivotos-xl-2.0",
+            "desc": "Kivotos XL V2.0, Open-source model built upon Animagine XL V3, a specialized for generating high-quality anime-style artwork.",
+            "pipeline": "sdXLp",
+            "pipeline_options": {"use_safetensors": True, "custom_pipeline": "lpw_stable_diffusion_xl", "torch_dtype": torch.float16, "add_watermarker": False, "variant": "fp16"},
+            "img_gen_option":  {"original_size": (512,512), "target_size": (1024,1024), "crops_coords_top_left": (0,0)}}
+            # prompt = "1girl, kazusa \(blue archive\), blue archive, solo, upper body, v, smile, looking at viewer, outdoors, night, masterpiece, best quality, very aesthetic, absurdres"
+            # negative_prompt = "nsfw, (low quality, worst quality:1.2), very displeasing, 3d, watermark, signature, ugly, poorly drawn"
     }
 
 summary = {}
@@ -54,7 +86,7 @@ def image_grid(imgs, rows, cols):
     w, h = imgs[0].size
     grid = Image.new('RGB', size=(cols*w, rows*h))
     grid_w, grid_h = grid.size
-    
+
     for i, img in enumerate(imgs):
         grid.paste(img, box=(i%cols*w, i//cols*h))
     return grid
@@ -70,41 +102,32 @@ def getPipeline(model, sfw):
     summary["model"] = modelInfo
     summary["sfw"] = sfw
 
-    sck = None
-    if sfw:
+    # safety_checker=StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
+    pipe_options = modelInfo["pipeline_options"]
+    if sfw == False:
         print("preparing safety checker")
-        safety_checker=StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker")
-
+        pipe_options["safety_checker"] = None
     pipe = None
-    if modelInfo["isLarge"]:
-        print("getting pipiline for large model")
-        #pipe = StableDiffusion3Pipeline.from_pretrained(model_path, torch_dtype=torch.float16)
-        pipe = StableDiffusionXLPipeline.from_pretrained(model_path)#, torch_dtype=torch.float16)
-    # elif model == "mm":
-    #     print("getting pipiline for Meina/MeinaMix")
-    #     pipe = DiffusionPipeline.from_pretrained(model_path, safety_checker=sck)
-    else:
-        print("getting standard pipiline")
-        pipe = StableDiffusionPipeline.from_pretrained(model_path, safety_checker=sck)
+    match modelInfo["pipeline"]:
+        case "sdXLp":
+            del pipe_options["safety_checker"]
+            #print(f'Current pipiline options: {pipe_options}')
+            pipe = StableDiffusionXLPipeline.from_pretrained(model_path, **pipe_options)
+        case "sdp":
+            pipe = StableDiffusionPipeline.from_pretrained(model_path, **pipe_options)
+        case "sd3p":
+            del pipe_options["safety_checker"]
+            #print(f'Current pipiline options: {pipe_options}')
+            pipe = StableDiffusion3Pipeline.from_pretrained(model_path, **pipe_options)
+        case "sd":
+            pipe = DiffusionPipeline.from_pretrained(model_path, **pipe_options)
+        case _:
+            pipe = StableDiffusionPipeline.from_pretrained(model_path, **pipe_options)
+    print(f'Current pipiline options: {pipe_options}')
 
     return pipe
 
-def generateImage(prompt, neg_prompt, model, sfw, iterate=1, temp=7.5, seed=-1, steps=10):
-    device="cpu"
-    if torch.cuda.is_available():
-        device=torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device=torch.device("mps")
-    print(f'device is: {device}')
-
-    width = 512
-    height = 512
-    size = (height, width)
-
-    pipe = getPipeline(model, sfw)
-
-    pipe = pipe.to(device)
-    generator = None
+def generateImage(prompt, neg_prompt, model, sfw, device, iterate=1, temp=7.5, seed=-1, steps=10):
 
     summary["device"] = device
     summary["prompt"] = prompt
@@ -112,21 +135,26 @@ def generateImage(prompt, neg_prompt, model, sfw, iterate=1, temp=7.5, seed=-1, 
     summary["steps"] = steps
     summary["temperature"] = temp
 
+    pipe = getPipeline(model, sfw)
+    pipe = pipe.to(device)
+
+    img_gen_option = models[model]["img_gen_option"]
+    print(f'Current image generation options: {img_gen_option}')
 
     if seed:
         print(f'manual seed set to: {seed}')
     else:
         seed = torch.seed()
-
     print(f'seed is set to: {seed}')
     summary["seed"] = seed
     generator = torch.Generator(device).manual_seed(seed)
-    
+
     prompts = [f'{prompt}']*iterate
 
     # image here is in [PIL format](https://pillow.readthedocs.io/en/stable/)
-    images = pipe(prompts, negative_prompt=[neg_prompt], num_inference_steps=steps, guidance_scale=temp, generator=generator).images
-    
+    #here we need to insert the options stored in img_gen_option
+    images = pipe(prompts, negative_prompt=[neg_prompt], num_inference_steps=steps, guidance_scale=temp, generator=generator, **img_gen_option).images
+
     return images
 
 def getFilesList(prefix):
@@ -216,26 +244,33 @@ def storeImagesToGrind():
     grid = image_grid(images, rows=1, cols=3)
     return
 
-args = parseArguments()
-#print(args)
 
-file_prefix = "genimage"
-if args.out_prefix == None:
-    #print("!!!")
-    if args.model != "def":
-        #print("!!!")
-        file_prefix == args.model
-        #print(f'file_prefix: {file_prefix}')
-else:
-    file_prefix = args.out_prefix
-    #print(f'file_prefix: {file_prefix} !!!')
+def main():
+    args = parseArguments()
 
-generated_images = generateImage(args.prompt, args.negative_prompt, args.model, sfw=args.sfw, steps=args.steps, temp=args.temperature, seed=args.seed, iterate=args.batch)
-storeImages(generated_images, file_prefix)
-printSummary()
+    file_prefix = "genimage"
+    if args.out_prefix == None:
+        if args.model != "def":
+            file_prefix == args.model
+            #print(f'file_prefix: {file_prefix}')
+    else:
+        file_prefix = args.out_prefix
+        #print(f'file_prefix: {file_prefix} !!!')
 
-print("Image generation complete!")
+    device="cpu"
+    if torch.cuda.is_available():
+        device=torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device=torch.device("mps")
+    print(f'device is: {device}')
 
+    generated_images = generateImage(args.prompt, args.negative_prompt, args.model, args.sfw, device, steps=args.steps, temp=args.temperature, seed=args.seed, iterate=args.batch)
+    storeImages(generated_images, file_prefix)
+    printSummary()
 
+    print("Image generation complete!")
+
+if __name__ == '__main__':
+    main()
 
 
