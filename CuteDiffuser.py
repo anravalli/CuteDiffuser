@@ -39,13 +39,13 @@ models = {
             "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}}, #photorealistic
     "rv":   {"path": "SG161222/Realistic_Vision_V1.4",
             "desc": "Photorealistic based on Stable Diffusion 1.4",
-            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {"original_size": (512,512), "target_size": (1024,1024)}},
     "cf":   {"path": "gsdf/Counterfeit-V2.5",
             "desc": "Manga and Anime tuned model",
-            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {"original_size": (512,512), "target_size": (1024,1024)}},
     "mm":   {"path": "Meina/MeinaMix_V11",
             "desc": "MeniaMix base model for anime and manga",
-            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {}},
+            "pipeline": "sdp", "pipeline_options": {}, "img_gen_option": {"original_size": (512,512), "target_size": (1024,1024)}},
     "ill":  {"path": "OnomaAIResearch/Illustrious-xl-early-release-v0",
             "desc": "Based on Stable Diffusion XL fine-tuned on Danbooru2023 Dataset, uncensored model",
             "pipeline": "sdXLp",
@@ -54,10 +54,16 @@ models = {
     "yoda": {"path": "yodayo-ai/kivotos-xl-2.0",
             "desc": "Kivotos XL V2.0, Open-source model built upon Animagine XL V3, a specialized for generating high-quality anime-style artwork.",
             "pipeline": "sdXLp",
-            "pipeline_options": {"use_safetensors": True, "custom_pipeline": "lpw_stable_diffusion_xl", "torch_dtype": torch.float16, "add_watermarker": False, "variant": "fp16"},
-            "img_gen_option":  {"original_size": (512,512), "target_size": (1024,1024), "crops_coords_top_left": (0,0)}}
+            "pipeline_options": {"add_watermarker": False, "variant": "fp16"},
+            #"pipeline_options": {"use_safetensors": True, "custom_pipeline": "lpw_stable_diffusion_xl", "add_watermarker": False, "variant": "fp16"},
+            #"pipeline_options": {"use_safetensors": True, "custom_pipeline": "lpw_stable_diffusion_xl", "torch_dtype": torch.float16, "add_watermarker": False,  "variant": "fp16"},
+            "img_gen_option":  {"original_size": (512,512), "target_size": (1024,1024), "crops_coords_top_left": (0,0)}},
             # prompt = "1girl, kazusa \(blue archive\), blue archive, solo, upper body, v, smile, looking at viewer, outdoors, night, masterpiece, best quality, very aesthetic, absurdres"
             # negative_prompt = "nsfw, (low quality, worst quality:1.2), very displeasing, 3d, watermark, signature, ugly, poorly drawn"
+    #"Qwen/Qwen-Image"
+    "qwen": {"path": "Qwen/Qwen-Image",
+            "desc": "Qwen Image model", "pipeline": "sd",
+            "pipeline_options": {}, "img_gen_option": {"original_size": (512,512), "target_size": (1024,1024)}}
     }
 
 summary = {}
@@ -70,11 +76,12 @@ def parseArguments():
 
     parser.add_argument('-p', '--prompt', type=str, default="a drowing an astronaut riding a horse")
     parser.add_argument('-np', '--negative-prompt', type=str, default="bad eyes, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits")
-    parser.add_argument('-b', '--batch', type=int, default=1)
+    #parser.add_argument('-b', '--batch', type=int, default=1)
     parser.add_argument('-s', '--steps', type=int, default=10)
     parser.add_argument('--seed', type=int)
     parser.add_argument('-t', '--temperature', type=float, default=7.5)
-    parser.add_argument('-o', '--out-prefix', type=str)
+    parser.add_argument('-o', '--out-directory', type=str, default="./")
+    parser.add_argument('-f', '--file-prefix', type=str, default="genimg")
     parser.add_argument('-m', '--model', type=str, default="def")
     parser.add_argument('-sfw', type=bool, default=False)
 
@@ -149,53 +156,45 @@ def generateImage(prompt, neg_prompt, model, sfw, device, iterate=1, temp=7.5, s
     summary["seed"] = seed
     generator = torch.Generator(device).manual_seed(seed)
 
-    prompts = [f'{prompt}']*iterate
+    #disabling multi image generation
+    #prompts = [f'{prompt}']*iterate
 
     # image here is in [PIL format](https://pillow.readthedocs.io/en/stable/)
     #here we need to insert the options stored in img_gen_option
-    images = pipe(prompts, negative_prompt=[neg_prompt], num_inference_steps=steps, guidance_scale=temp, generator=generator, **img_gen_option).images
+    images = pipe(prompt, negative_prompt=neg_prompt, num_inference_steps=steps,
+                  guidance_scale=temp, generator=generator, dtype=torch.float16, **img_gen_option).images
 
     return images
 
-def getFilesList(prefix):
-    directory_path = "./"
-    directory = pathlib.Path(directory_path)
+def getFilesList(base_dir, prefix):
 
+    directory = pathlib.Path(base_dir)
     pattern = prefix + "*.png"
     #print(pattern)
 
     found_files = []
     if not directory.is_dir():
-        print(f"ERROR: The directory '{directory_path}' does not exist.")
+        print(f"ERROR: The directory '{base_dir}' does not exist.")
     else:
         found_files = list(directory.glob(pattern))
         #print(f'found files: {found_files}')
     return found_files
 
-def initCounter(prefix):
+def initCounter(directory, prefix):
     #print("------ initCounter ------")
-
-
-    file_names = getFilesList(prefix)
-
+    file_names = getFilesList(directory, prefix)
     regex_pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)\.png$")
-
     max_index = -1
     for fname in file_names:
         name = fname.name
         match = regex_pattern.match(name)
         if match:
             try:
-                # Estrai il gruppo catturato (l'indice) e convertilo in intero
                 current_index = int(match.group(1))
-
-                # Aggiorna l'indice massimo
                 if current_index > max_index:
                     max_index = current_index
             except ValueError:
-                # Questo è improbabile data la regex (\d+), ma è una buona pratica
                 print(f"Warning: Cannot convert index for file: {name}")
-
     #print("------------")
     return max_index + 1
 
@@ -219,12 +218,13 @@ def storeImage(image, img_name):
     except Exception as e:
         print(f"❌ Errore durante il salvataggio: {e}")
 
-def storeImages(images, prefix):
-    # Now to display an image you can either save it such as:
-    counter=initCounter(prefix)
+def storeImages(images, directory, prefix):
+    if directory[-1] != '/':
+        directory += '/'
+    counter=initCounter(directory, prefix)
     files = []
     for image in images:
-        img_name = f"{prefix}-{counter}.png"
+        img_name = f"{directory}{prefix}-{counter}.png"
         files.append(img_name)
         storeImage(image, img_name)
         counter += 1
@@ -247,16 +247,6 @@ def storeImagesToGrind():
 
 def main():
     args = parseArguments()
-
-    file_prefix = "genimage"
-    if args.out_prefix == None:
-        if args.model != "def":
-            file_prefix == args.model
-            #print(f'file_prefix: {file_prefix}')
-    else:
-        file_prefix = args.out_prefix
-        #print(f'file_prefix: {file_prefix} !!!')
-
     device="cpu"
     if torch.cuda.is_available():
         device=torch.device("cuda")
@@ -264,8 +254,10 @@ def main():
         device=torch.device("mps")
     print(f'device is: {device}')
 
-    generated_images = generateImage(args.prompt, args.negative_prompt, args.model, args.sfw, device, steps=args.steps, temp=args.temperature, seed=args.seed, iterate=args.batch)
-    storeImages(generated_images, file_prefix)
+    generated_images = generateImage(args.prompt, args.negative_prompt, args.model,
+                                     args.sfw, device, steps=args.steps, temp=args.temperature,
+                                     seed=args.seed) #, iterate=args.batch)
+    storeImages(generated_images, args.out_directory, args.file_prefix)
     printSummary()
 
     print("Image generation complete!")
